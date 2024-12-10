@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -124,6 +125,15 @@ fun DrawingApp() {
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
+                    // Detect long press to invert colors
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onLongPress = {
+                                invertColors(paths)
+                            }
+                        )
+                    }
+                    // Detect dragging for drawing
                     .pointerInput(Unit) {
                         detectDragGestures(
                             onDragStart = { offset ->
@@ -143,7 +153,6 @@ fun DrawingApp() {
                                             alpha = currentAlpha
                                         )
                                     )
-                                    // Once a new path is added, we clear undonePaths because we made a new action
                                     undonePaths.clear()
                                 }
                                 currentPath = null
@@ -204,6 +213,22 @@ fun DrawingApp() {
 }
 
 data class PaintOptions(val color: Color, val strokeWidth: Float, val alpha: Float)
+
+fun invertColor(color: Color): Color {
+    return Color(
+        red = 1f - color.red,
+        green = 1f - color.green,
+        blue = 1f - color.blue,
+        alpha = color.alpha
+    )
+}
+
+fun invertColors(paths: MutableList<Pair<Path, PaintOptions>>) {
+    for (i in paths.indices) {
+        val (path, paintOptions) = paths[i]
+        paths[i] = path to paintOptions.copy(color = invertColor(paintOptions.color))
+    }
+}
 
 @Composable
 fun ColorPickerDialog(
