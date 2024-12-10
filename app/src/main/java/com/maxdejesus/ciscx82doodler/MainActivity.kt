@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -39,6 +40,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun DrawingApp() {
     val paths = remember { mutableStateListOf<Pair<Path, PaintOptions>>() }
+    val undonePaths = remember { mutableStateListOf<Pair<Path, PaintOptions>>() }
     var currentPath by remember { mutableStateOf<Path?>(null) }
     var currentColor by remember { mutableStateOf(Color.Black) }
     var currentStrokeWidth by remember { mutableStateOf(5f) }
@@ -50,11 +52,13 @@ fun DrawingApp() {
 
     Scaffold(
         topBar = {
-            //Experimental feature flag must be activated
             TopAppBar(
                 title = { Text("Drawing Canvas") },
                 actions = {
-                    TextButton(onClick = { paths.clear() }) {
+                    TextButton(onClick = {
+                        paths.clear()
+                        undonePaths.clear()
+                    }) {
                         Text("Clear")
                     }
                     TextButton(onClick = { showColorPicker = true }) {
@@ -112,50 +116,88 @@ fun DrawingApp() {
             )
         }
 
-        Canvas(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            currentPath = Path().apply {
-                                moveTo(offset.x, offset.y)
-                            }
-                        },
-                        onDrag = { change, _ ->
-                            currentPath?.lineTo(change.position.x, change.position.y)
-                        },
-                        onDragEnd = {
-                            currentPath?.let { path ->
-                                paths.add(
-                                    path to PaintOptions(
-                                        color = currentColor,
-                                        strokeWidth = currentStrokeWidth,
-                                        alpha = currentAlpha
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                currentPath = Path().apply {
+                                    moveTo(offset.x, offset.y)
+                                }
+                            },
+                            onDrag = { change, _ ->
+                                currentPath?.lineTo(change.position.x, change.position.y)
+                            },
+                            onDragEnd = {
+                                currentPath?.let { path ->
+                                    paths.add(
+                                        path to PaintOptions(
+                                            color = currentColor,
+                                            strokeWidth = currentStrokeWidth,
+                                            alpha = currentAlpha
+                                        )
                                     )
-                                )
+                                    // Once a new path is added, we clear undonePaths because we made a new action
+                                    undonePaths.clear()
+                                }
+                                currentPath = null
                             }
-                            currentPath = null
-                        }
+                        )
+                    }
+            ) {
+                // Draw all the completed paths
+                for ((path, paintOptions) in paths) {
+                    drawPath(
+                        path = path,
+                        color = paintOptions.color.copy(alpha = paintOptions.alpha),
+                        style = Stroke(width = paintOptions.strokeWidth)
                     )
                 }
-        ) {
-            // Draw all the completed paths
-            for ((path, paintOptions) in paths) {
-                drawPath(
-                    path = path,
-                    color = paintOptions.color.copy(alpha = paintOptions.alpha),
-                    style = Stroke(width = paintOptions.strokeWidth)
-                )
+                // Draw the path currently being drawn
+                currentPath?.let { path ->
+                    drawPath(
+                        path = path,
+                        color = currentColor.copy(alpha = currentAlpha),
+                        style = Stroke(width = currentStrokeWidth)
+                    )
+                }
             }
-            // Draw the path currently being drawn
-            currentPath?.let { path ->
-                drawPath(
-                    path = path,
-                    color = currentColor.copy(alpha = currentAlpha),
-                    style = Stroke(width = currentStrokeWidth)
-                )
+
+            // Undo/Redo buttons at the bottom-left corner
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(
+                    onClick = {
+                        if (paths.isNotEmpty()) {
+                            val lastPath = paths.removeLast()
+                            undonePaths.add(lastPath)
+                        }
+                    },
+                    enabled = paths.isNotEmpty()
+                ) {
+                    Text("Undo")
+                }
+                TextButton(
+                    onClick = {
+                        if (undonePaths.isNotEmpty()) {
+                            val pathToRestore = undonePaths.removeLast()
+                            paths.add(pathToRestore)
+                        }
+                    },
+                    enabled = undonePaths.isNotEmpty()
+                ) {
+                    Text("Redo")
+                }
             }
         }
     }
